@@ -1,92 +1,91 @@
-// src/features/notes/context/NotesContext.tsx
-import React, {
-  createContext,
-  useContext,
-  useState,
-  type ReactNode,
-} from 'react';
-import type { Note } from '../types';
+import React, { createContext, useContext, useState, ReactNode } from 'react';
+import type { Note, NoteTemplate } from '../types';
 
 type NotesContextValue = {
   notes: Note[];
   addNote: (input: {
     title: string;
     message: string;
-    template: Note['template'];
-    fromMe?: boolean;
+    template: NoteTemplate;
+    fromMe: boolean;
   }) => void;
+  deleteNote: (id: string) => void;
 };
 
 const NotesContext = createContext<NotesContextValue | undefined>(undefined);
 
-const initialNotes: Note[] = [
-  {
-    id: '1',
-    title: 'Coffee? ☕',
-    message: 'Don’t forget our coffee date at 16:00 💕',
-    template: 'yellow',
-    createdAt: new Date().toISOString(),
-    fromMe: false,
-  },
-  {
-    id: '2',
-    title: 'Groceries 🛒',
-    message: '- Milk\n- Eggs\n- Pasta\n- Something sweet 😋',
-    template: 'pink',
-    createdAt: new Date().toISOString(),
-    fromMe: true,
-  },
-  {
-    id: '3',
-    title: 'Proud of you',
-    message: 'Good luck with your exam today, you got this. ✨',
-    template: 'blue',
-    createdAt: new Date().toISOString(),
-    fromMe: false,
-  },
-  {
-    id: '4',
-    title: 'Dinner idea 🍝',
-    message: 'Carbonara tonight? I’ll bring the parmesan!',
-    template: 'green',
-    createdAt: new Date().toISOString(),
-    fromMe: true,
-  },
-];
+const createInitialNotes = (): Note[] => {
+  const now = new Date().toISOString();
 
-export const NotesProvider: React.FC<{ children: ReactNode }> = ({
-  children,
-}) => {
-  const [notes, setNotes] = useState<Note[]>(initialNotes);
+  return [
+    {
+      id: '1',
+      title: 'Coffee? ☕',
+      message: 'Don’t forget our coffee date at 16:00 💕',
+      template: 'yellow',
+      createdAt: now,
+      fromMe: false,
+    },
+    {
+      id: '2',
+      title: 'Groceries 🛒',
+      message: '- Milk\n- Eggs\n- Pasta\n- Something sweet 😋',
+      template: 'pink',
+      createdAt: now,
+      fromMe: true,
+    },
+    {
+      id: '3',
+      title: 'Proud of you',
+      message: 'Good luck with your exam today, you got this. ✨',
+      template: 'blue',
+      createdAt: now,
+      fromMe: false,
+    },
+    {
+      id: '4',
+      title: 'Dinner idea 🍝',
+      message: 'Carbonara tonight? I’ll bring the parmesan!',
+      template: 'green',
+      createdAt: now,
+      fromMe: true,
+    },
+  ];
+};
+
+type NotesProviderProps = {
+  children: ReactNode;
+};
+
+export const NotesProvider: React.FC<NotesProviderProps> = ({ children }) => {
+  const [notes, setNotes] = useState<Note[]>(createInitialNotes);
 
   const addNote: NotesContextValue['addNote'] = ({
     title,
     message,
     template,
-    fromMe = true,
+    fromMe,
   }) => {
-    const trimmedMessage = message.trim();
-    const trimmedTitle = title.trim();
-
-    if (!trimmedMessage) {
-      return;
-    }
-
-    const newNote: Note = {
-      id: Date.now().toString(),
-      title: trimmedTitle || 'Untitled',
-      message: trimmedMessage,
+    const now = new Date().toISOString();
+    const note: Note = {
+      id: now + Math.random().toString(36).slice(2),
+      title: title.trim() || 'Untitled',
+      message: message.trim(),
       template,
-      createdAt: new Date().toISOString(),
+      createdAt: now,
       fromMe,
     };
 
-    // νέο note πάνω-πάνω
-    setNotes((prev) => [newNote, ...prev]);
+    // προσθέτουμε στο τέλος (κάτω στο grid)
+    setNotes((prev) => [...prev, note]);
+  };
+
+  const deleteNote: NotesContextValue['deleteNote'] = (id) => {
+    setNotes((prev) => prev.filter((n) => n.id !== id));
   };
 
   return (
-    <NotesContext.Provider value={{ notes, addNote }}>
+    <NotesContext.Provider value={{ notes, addNote, deleteNote }}>
       {children}
     </NotesContext.Provider>
   );

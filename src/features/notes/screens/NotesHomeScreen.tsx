@@ -1,4 +1,3 @@
-// src/features/notes/screens/NotesHomeScreen.tsx
 import React, { useState } from 'react';
 import {
   View,
@@ -14,11 +13,12 @@ import {
   Pressable,
 } from 'react-native';
 import { StickyNoteCard } from '../components/StickyNoteCard';
-import type { Note, NoteTemplate } from '../types';
+import type { NoteTemplate } from '../types';
 import { colors } from '../../../theme/colors';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../../navigation/types';
+import { useNotes } from '../context/NotesContext';
 
 type HomeScreenNavigationProp = NativeStackNavigationProp<
   RootStackParamList,
@@ -27,50 +27,13 @@ type HomeScreenNavigationProp = NativeStackNavigationProp<
 
 type NotesFilter = 'all' | 'me' | 'them';
 
-const initialNotes: Note[] = [
-  {
-    id: '1',
-    title: 'Coffee? ☕',
-    message: 'Don’t forget our coffee date at 16:00 💕',
-    template: 'yellow',
-    createdAt: new Date().toISOString(),
-    fromMe: false,
-  },
-  {
-    id: '2',
-    title: 'Groceries 🛒',
-    message: '- Milk\n- Eggs\n- Pasta\n- Something sweet 😋',
-    template: 'pink',
-    createdAt: new Date().toISOString(),
-    fromMe: true,
-  },
-  {
-    id: '3',
-    title: 'Proud of you',
-    message: 'Good luck with your exam today, you got this. ✨',
-    template: 'blue',
-    createdAt: new Date().toISOString(),
-    fromMe: false,
-  },
-  {
-    id: '4',
-    title: 'Dinner idea 🍝',
-    message: 'Carbonara tonight? I’ll bring the parmesan!',
-    template: 'green',
-    createdAt: new Date().toISOString(),
-    fromMe: true,
-  },
-];
-
 export const NotesHomeScreen: React.FC = () => {
   const navigation = useNavigation<HomeScreenNavigationProp>();
 
-  const [notes, setNotes] = useState<Note[]>(initialNotes);
+  const { notes, addNote } = useNotes();
 
-  // filter state
   const [filter, setFilter] = useState<NotesFilter>('all');
 
-  // modal state
   const [isCreating, setIsCreating] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [newMessage, setNewMessage] = useState('');
@@ -92,19 +55,13 @@ export const NotesHomeScreen: React.FC = () => {
       return;
     }
 
-    const now = new Date().toISOString();
-
-    const note: Note = {
-      id: now + Math.random().toString(36).slice(2),
-      title: newTitle.trim() || 'Untitled',
-      message: newMessage.trim(),
+    addNote({
+      title: newTitle,
+      message: newMessage,
       template: newTemplate,
-      createdAt: now,
       fromMe: true,
-    };
+    });
 
-    // προσθέτουμε το καινούργιο note στο τέλος
-    setNotes((prev) => [...prev, note]);
     closeCreateModal();
   };
 
@@ -337,7 +294,6 @@ const styles = StyleSheet.create({
     width: '48%',
     marginBottom: 8,
   },
-  // FAB
   fab: {
     position: 'absolute',
     right: 24,
@@ -359,7 +315,6 @@ const styles = StyleSheet.create({
     color: '#fff',
     marginTop: -2,
   },
-  // Modal
   modalOverlay: {
     flex: 1,
     justifyContent: 'flex-end',
