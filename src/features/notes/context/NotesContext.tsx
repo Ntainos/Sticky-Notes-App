@@ -9,6 +9,10 @@ type NotesContextValue = {
     template: NoteTemplate;
     fromMe: boolean;
   }) => void;
+  updateNote: (
+    id: string,
+    changes: Partial<Pick<Note, 'title' | 'message' | 'template' | 'fromMe'>>
+  ) => void;
   deleteNote: (id: string) => void;
 };
 
@@ -76,8 +80,13 @@ export const NotesProvider: React.FC<NotesProviderProps> = ({ children }) => {
       fromMe,
     };
 
-    // προσθέτουμε στο τέλος (κάτω στο grid)
     setNotes((prev) => [...prev, note]);
+  };
+
+  const updateNote: NotesContextValue['updateNote'] = (id, changes) => {
+    setNotes((prev) =>
+      prev.map((n) => (n.id === id ? { ...n, ...changes } : n)),
+    );
   };
 
   const deleteNote: NotesContextValue['deleteNote'] = (id) => {
@@ -85,7 +94,7 @@ export const NotesProvider: React.FC<NotesProviderProps> = ({ children }) => {
   };
 
   return (
-    <NotesContext.Provider value={{ notes, addNote, deleteNote }}>
+    <NotesContext.Provider value={{ notes, addNote, updateNote, deleteNote }}>
       {children}
     </NotesContext.Provider>
   );
