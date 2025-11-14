@@ -25,6 +25,8 @@ type HomeScreenNavigationProp = NativeStackNavigationProp<
   'Home'
 >;
 
+type NotesFilter = 'all' | 'me' | 'them';
+
 const initialNotes: Note[] = [
   {
     id: '1',
@@ -65,6 +67,10 @@ export const NotesHomeScreen: React.FC = () => {
 
   const [notes, setNotes] = useState<Note[]>(initialNotes);
 
+  // filter state
+  const [filter, setFilter] = useState<NotesFilter>('all');
+
+  // modal state
   const [isCreating, setIsCreating] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [newMessage, setNewMessage] = useState('');
@@ -97,7 +103,7 @@ export const NotesHomeScreen: React.FC = () => {
       fromMe: true,
     };
 
-    // 👉 Βάζουμε το καινούργιο note στο ΤΕΛΟΣ (κάτω στο grid)
+    // προσθέτουμε το καινούργιο note στο τέλος
     setNotes((prev) => [...prev, note]);
     closeCreateModal();
   };
@@ -131,15 +137,52 @@ export const NotesHomeScreen: React.FC = () => {
     );
   };
 
+  const renderFilterChip = (value: NotesFilter, label: string) => {
+    const isActive = filter === value;
+    return (
+      <TouchableOpacity
+        key={value}
+        style={[
+          styles.filterChip,
+          isActive && styles.filterChipActive,
+        ]}
+        onPress={() => setFilter(value)}
+      >
+        <Text
+          style={[
+            styles.filterChipText,
+            isActive && styles.filterChipTextActive,
+          ]}
+        >
+          {label}
+        </Text>
+      </TouchableOpacity>
+    );
+  };
+
+  const filteredNotes = notes.filter((note) => {
+    if (filter === 'all') return true;
+    if (filter === 'me') return note.fromMe;
+    if (filter === 'them') return !note.fromMe;
+    return true;
+  });
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.screenContainer}>
         <Text style={styles.appTitle}>Fridge Notes</Text>
         <Text style={styles.subtitle}>Little notes between two hearts 💛</Text>
 
+        {/* Filter row */}
+        <View style={styles.filterRow}>
+          {renderFilterChip('all', 'All')}
+          {renderFilterChip('me', 'From you')}
+          {renderFilterChip('them', 'From them')}
+        </View>
+
         <View style={styles.fridgeArea}>
           <FlatList
-            data={notes}
+            data={filteredNotes}
             keyExtractor={(item) => item.id}
             numColumns={2}
             contentContainerStyle={styles.listContent}
@@ -252,7 +295,30 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.textSecondary,
     marginTop: 4,
-    marginBottom: 16,
+    marginBottom: 8,
+  },
+  filterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+    gap: 8,
+  },
+  filterChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 999,
+    backgroundColor: '#E5E7EB',
+  },
+  filterChipActive: {
+    backgroundColor: '#111827',
+  },
+  filterChipText: {
+    fontSize: 13,
+    color: colors.textSecondary,
+  },
+  filterChipTextActive: {
+    color: '#F9FAFB',
+    fontWeight: '600',
   },
   fridgeArea: {
     flex: 1,
@@ -268,7 +334,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   noteItem: {
-    width: '48%', // λίγο μικρότερο από το μισό για να αφήνει ωραίο κενό ανάμεσα
+    width: '48%',
     marginBottom: 8,
   },
   // FAB
