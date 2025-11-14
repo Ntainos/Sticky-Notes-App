@@ -10,6 +10,14 @@ import {
 import { StickyNoteCard } from '../components/StickyNoteCard';
 import type { Note } from '../types';
 import { colors } from '../../../theme/colors';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '../../../navigation/types';
+
+type HomeScreenNavigationProp = NativeStackNavigationProp<
+  RootStackParamList,
+  'Home'
+>;
 
 const dummyNotes: Note[] = [
   {
@@ -47,6 +55,8 @@ const dummyNotes: Note[] = [
 ];
 
 export const NotesHomeScreen: React.FC = () => {
+  const navigation = useNavigation<HomeScreenNavigationProp>();
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.screenContainer}>
@@ -62,10 +72,9 @@ export const NotesHomeScreen: React.FC = () => {
             renderItem={({ item }) => (
               <StickyNoteCard
                 note={item}
-                onPress={() => {
-                  // later: navigate to note details
-                  console.log('Pressed note', item.id);
-                }}
+                onPress={() =>
+                  navigation.navigate('NoteDetails', { note: item })
+                }
               />
             )}
           />
