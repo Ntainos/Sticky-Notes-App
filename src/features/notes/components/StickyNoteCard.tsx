@@ -51,8 +51,7 @@ export const StickyNoteCard: React.FC<StickyNoteCardProps> = ({
 
 const styles = StyleSheet.create({
   cardContainer: {
-    flex: 1,
-    margin: 8,
+    width: '100%',
     paddingTop: 10,
     paddingHorizontal: 10,
     paddingBottom: 12,
@@ -61,9 +60,9 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.18,
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 4 },
-    elevation: 4, // Android shadow
+    elevation: 4,
     transform: [{ rotate: '-1deg' }],
-  },
+},
   pinDot: {
     width: 10,
     height: 10,
