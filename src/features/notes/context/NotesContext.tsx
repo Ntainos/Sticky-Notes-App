@@ -1,97 +1,103 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
-import type { Note, NoteTemplate } from '../types';
+// src/features/notes/context/NotesContext.tsx
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useState,
+} from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Note, NoteSender, NoteTemplate } from '../types';
+import { initialNotes } from '../data/initialNotes';
+
+const NOTES_STORAGE_KEY = '@fridgeNotes/notes';
+
+type NewNoteInput = {
+  title: string;
+  body: string;
+  template: NoteTemplate;
+  sender: NoteSender;
+};
 
 type NotesContextValue = {
   notes: Note[];
-  addNote: (input: {
-    title: string;
-    message: string;
-    template: NoteTemplate;
-    fromMe: boolean;
-  }) => void;
-  updateNote: (
-    id: string,
-    changes: Partial<Pick<Note, 'title' | 'message' | 'template' | 'fromMe'>>
-  ) => void;
+  addNote: (input: NewNoteInput) => void;
+  updateNote: (id: string, updates: Partial<NewNoteInput>) => void;
   deleteNote: (id: string) => void;
 };
 
 const NotesContext = createContext<NotesContextValue | undefined>(undefined);
 
-const createInitialNotes = (): Note[] => {
-  const now = new Date().toISOString();
+export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({
+  children,
+}) => {
+  const [notes, setNotes] = useState<Note[]>(initialNotes);
+  const [hasHydrated, setHasHydrated] = useState(false);
 
-  return [
-    {
-      id: '1',
-      title: 'Coffee? ☕',
-      message: 'Don’t forget our coffee date at 16:00 💕',
-      template: 'yellow',
-      createdAt: now,
-      fromMe: false,
-    },
-    {
-      id: '2',
-      title: 'Groceries 🛒',
-      message: '- Milk\n- Eggs\n- Pasta\n- Something sweet 😋',
-      template: 'pink',
-      createdAt: now,
-      fromMe: true,
-    },
-    {
-      id: '3',
-      title: 'Proud of you',
-      message: 'Good luck with your exam today, you got this. ✨',
-      template: 'blue',
-      createdAt: now,
-      fromMe: false,
-    },
-    {
-      id: '4',
-      title: 'Dinner idea 🍝',
-      message: 'Carbonara tonight? I’ll bring the parmesan!',
-      template: 'green',
-      createdAt: now,
-      fromMe: true,
-    },
-  ];
-};
-
-type NotesProviderProps = {
-  children: ReactNode;
-};
-
-export const NotesProvider: React.FC<NotesProviderProps> = ({ children }) => {
-  const [notes, setNotes] = useState<Note[]>(createInitialNotes);
-
-  const addNote: NotesContextValue['addNote'] = ({
-    title,
-    message,
-    template,
-    fromMe,
-  }) => {
-    const now = new Date().toISOString();
-    const note: Note = {
-      id: now + Math.random().toString(36).slice(2),
-      title: title.trim() || 'Untitled',
-      message: message.trim(),
-      template,
-      createdAt: now,
-      fromMe,
+  // Load notes from storage on first mount
+  useEffect(() => {
+    const loadNotes = async () => {
+      try {
+        const stored = await AsyncStorage.getItem(NOTES_STORAGE_KEY);
+        if (stored) {
+          const parsed: Note[] = JSON.parse(stored);
+          setNotes(parsed);
+        }
+      } catch (error) {
+        console.warn('Failed to load notes from storage', error);
+      } finally {
+        setHasHydrated(true);
+      }
     };
 
-    setNotes((prev) => [...prev, note]);
-  };
+    loadNotes();
+  }, []);
 
-  const updateNote: NotesContextValue['updateNote'] = (id, changes) => {
-    setNotes((prev) =>
-      prev.map((n) => (n.id === id ? { ...n, ...changes } : n)),
-    );
-  };
+  // Save notes whenever they change (after initial hydration)
+  useEffect(() => {
+    if (!hasHydrated) return;
 
-  const deleteNote: NotesContextValue['deleteNote'] = (id) => {
-    setNotes((prev) => prev.filter((n) => n.id !== id));
-  };
+    const saveNotes = async () => {
+      try {
+        await AsyncStorage.setItem(NOTES_STORAGE_KEY, JSON.stringify(notes));
+      } catch (error) {
+        console.warn('Failed to save notes to storage', error);
+      }
+    };
+
+    saveNotes();
+  }, [notes, hasHydrated]);
+
+  const addNote = useCallback((input: NewNoteInput) => {
+    const now = new Date().toISOString();
+    const newNote: Note = {
+      id: Math.random().toString(36).slice(2),
+      createdAt: now,
+      ...input,
+    };
+
+    setNotes((prev) => [newNote, ...prev]);
+  }, []);
+
+  const updateNote = useCallback(
+    (id: string, updates: Partial<NewNoteInput>) => {
+      setNotes((prev) =>
+        prev.map((note) =>
+          note.id === id
+            ? {
+                ...note,
+                ...updates,
+              }
+            : note,
+        ),
+      );
+    },
+    [],
+  );
+
+  const deleteNote = useCallback((id: string) => {
+    setNotes((prev) => prev.filter((note) => note.id !== id));
+  }, []);
 
   return (
     <NotesContext.Provider value={{ notes, addNote, updateNote, deleteNote }}>
@@ -102,8 +108,10 @@ export const NotesProvider: React.FC<NotesProviderProps> = ({ children }) => {
 
 export const useNotes = (): NotesContextValue => {
   const ctx = useContext(NotesContext);
+
   if (!ctx) {
     throw new Error('useNotes must be used within a NotesProvider');
   }
+
   return ctx;
 };
