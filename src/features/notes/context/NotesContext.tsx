@@ -1,117 +1,164 @@
 // src/features/notes/context/NotesContext.tsx
-import React, {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useState,
-} from 'react';
+
+import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Note, NoteSender, NoteTemplate } from '../types';
-import { initialNotes } from '../data/initialNotes';
+
+import { Note, NoteTemplate, NoteDeliveryStyle } from '../types';
+import { useSpaces } from '../../spaces/context/SpacesContext';
 
 const NOTES_STORAGE_KEY = '@fridgeNotes/notes';
 
-type NewNoteInput = {
-  title: string;
-  body: string;
-  template: NoteTemplate;
-  sender: NoteSender;
-};
-
-type NotesContextValue = {
+interface NotesContextValue {
   notes: Note[];
-  addNote: (input: NewNoteInput) => void;
-  updateNote: (id: string, updates: Partial<NewNoteInput>) => void;
-  deleteNote: (id: string) => void;
-};
+  isLoading: boolean;
+  addNote: (
+    title: string,
+    body: string,
+    template: NoteTemplate,
+    deliveryStyle: NoteDeliveryStyle,
+  ) => Promise<void>;
+  updateNote: (
+    id: string,
+    title: string,
+    body: string,
+    template: NoteTemplate,
+    deliveryStyle: NoteDeliveryStyle,
+  ) => Promise<void>;
+  deleteNote: (id: string) => Promise<void>;
+}
 
 const NotesContext = createContext<NotesContextValue | undefined>(undefined);
 
-export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({
-  children,
-}) => {
-  const [notes, setNotes] = useState<Note[]>(initialNotes);
-  const [hasHydrated, setHasHydrated] = useState(false);
+const generateId = () =>
+  `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
-  // Load notes from storage on first mount
+export const NotesProvider: React.FC<React.PropsWithChildren> = ({ children }) => {
+  const { activeSpaceId, spaces } = useSpaces();
+  const [allNotes, setAllNotes] = useState<Note[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
   useEffect(() => {
     const loadNotes = async () => {
       try {
-        const stored = await AsyncStorage.getItem(NOTES_STORAGE_KEY);
-        if (stored) {
-          const parsed: Note[] = JSON.parse(stored);
-          setNotes(parsed);
+        const raw = await AsyncStorage.getItem(NOTES_STORAGE_KEY);
+        if (raw) {
+          const parsedRaw = JSON.parse(raw) as any[];
+          const normalized: Note[] = parsedRaw.map((n) => ({
+            id: n.id,
+            title: n.title ?? '',
+            body: n.body ?? '',
+            sender: n.sender ?? 'you',
+            template: n.template ?? 'postit',
+            deliveryStyle: n.deliveryStyle ?? 'sticky',
+            createdAt: n.createdAt ?? new Date().toISOString(),
+            spaceId: n.spaceId ?? 'space-us',
+          }));
+          setAllNotes(normalized);
+        } else {
+          setAllNotes([]);
         }
       } catch (error) {
-        console.warn('Failed to load notes from storage', error);
+        console.warn('Failed to load notes', error);
+        setAllNotes([]);
       } finally {
-        setHasHydrated(true);
+        setIsLoading(false);
       }
     };
 
     loadNotes();
   }, []);
 
-  // Save notes whenever they change (after initial hydration)
-  useEffect(() => {
-    if (!hasHydrated) return;
+  const persistNotes = async (nextNotes: Note[]) => {
+    setAllNotes(nextNotes);
+    try {
+      await AsyncStorage.setItem(NOTES_STORAGE_KEY, JSON.stringify(nextNotes));
+    } catch (error) {
+      console.warn('Failed to save notes', error);
+    }
+  };
 
-    const saveNotes = async () => {
-      try {
-        await AsyncStorage.setItem(NOTES_STORAGE_KEY, JSON.stringify(notes));
-      } catch (error) {
-        console.warn('Failed to save notes to storage', error);
-      }
-    };
+  const notes = useMemo(
+    () =>
+      activeSpaceId ? allNotes.filter((n) => n.spaceId === activeSpaceId) : [],
+    [activeSpaceId, allNotes],
+  );
 
-    saveNotes();
-  }, [notes, hasHydrated]);
+  const addNote = async (
+    title: string,
+    body: string,
+    template: NoteTemplate,
+    deliveryStyle: NoteDeliveryStyle,
+  ) => {
+    const fallbackSpaceId = activeSpaceId ?? spaces[0]?.id;
+    if (!fallbackSpaceId) {
+      // If no active space exists, avoid creating an orphaned note.
+      console.warn('No active space to attach note to');
+      return;
+    }
 
-  const addNote = useCallback((input: NewNoteInput) => {
-    const now = new Date().toISOString();
+    const trimmedTitle = title.trim();
+    const trimmedBody = body.trim();
+
     const newNote: Note = {
-      id: Math.random().toString(36).slice(2),
-      createdAt: now,
-      ...input,
+      id: generateId(),
+      title: trimmedTitle || 'Untitled',
+      body: trimmedBody,
+      sender: 'you',
+      template,
+      deliveryStyle,
+      createdAt: new Date().toISOString(),
+      spaceId: fallbackSpaceId,
     };
 
-    setNotes((prev) => [newNote, ...prev]);
-  }, []);
+    const next = [newNote, ...allNotes];
+    await persistNotes(next);
+  };
 
-  const updateNote = useCallback(
-    (id: string, updates: Partial<NewNoteInput>) => {
-      setNotes((prev) =>
-        prev.map((note) =>
-          note.id === id
-            ? {
-                ...note,
-                ...updates,
-              }
-            : note,
-        ),
-      );
-    },
-    [],
-  );
+  const updateNote = async (
+    id: string,
+    title: string,
+    body: string,
+    template: NoteTemplate,
+    deliveryStyle: NoteDeliveryStyle,
+  ) => {
+    const trimmedTitle = title.trim();
+    const trimmedBody = body.trim();
 
-  const deleteNote = useCallback((id: string) => {
-    setNotes((prev) => prev.filter((note) => note.id !== id));
-  }, []);
+    const next = allNotes.map((n) =>
+      n.id === id
+        ? {
+            ...n,
+            title: trimmedTitle || 'Untitled',
+            body: trimmedBody,
+            template,
+            deliveryStyle,
+          }
+        : n,
+    );
 
-  return (
-    <NotesContext.Provider value={{ notes, addNote, updateNote, deleteNote }}>
-      {children}
-    </NotesContext.Provider>
-  );
+    await persistNotes(next);
+  };
+
+  const deleteNote = async (id: string) => {
+    const next = allNotes.filter((n) => n.id !== id);
+    await persistNotes(next);
+  };
+
+  const value: NotesContextValue = {
+    notes,
+    isLoading,
+    addNote,
+    updateNote,
+    deleteNote,
+  };
+
+  return <NotesContext.Provider value={value}>{children}</NotesContext.Provider>;
 };
 
-export const useNotes = (): NotesContextValue => {
+export const useNotes = () => {
   const ctx = useContext(NotesContext);
-
   if (!ctx) {
     throw new Error('useNotes must be used within a NotesProvider');
   }
-
   return ctx;
 };

@@ -1,12 +1,18 @@
 // src/features/notes/types.ts
 
-export type NoteTemplate = 'yellow' | 'pink' | 'blue' | 'green';
+export type NoteSender = 'you' | 'them';
+
+export type NoteTemplate = 'postit' | 'cute' | 'calm' | 'fresh';
+
+export type NoteDeliveryStyle = 'sticky' | 'letter';
 
 export interface Note {
   id: string;
   title: string;
-  message: string;
+  body: string;
+  sender: NoteSender;
   template: NoteTemplate;
-  createdAt: string; // ISO string
-  fromMe: boolean;   // true = εγώ έστειλα, false = ο/η άλλος
+  deliveryStyle: NoteDeliveryStyle;
+  createdAt: string;
+  spaceId: string;
 }

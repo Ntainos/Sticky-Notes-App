@@ -1,37 +1,46 @@
-// src/features/notes/data/initialNotes.ts
+import { Note } from '../types';
 
-// Δεν χρησιμοποιώ τύπους εδώ για να μην σπάει τίποτα – είναι απλά demo notes.
-export const initialNotes = [
+const now = new Date().toISOString();
+
+export const initialNotes: Note[] = [
   {
     id: '1',
-    title: 'Coffee? ☕️',
-    body: "Don't forget our coffee date at 16:00 💕",
-    template: 'postIt',
+    title: 'Coffee date',
+    body: "Don't forget our coffee date at 16:00",
+    template: 'postit',
     sender: 'them',
-    createdAt: '2025-11-15T10:00:00.000Z',
+    deliveryStyle: 'sticky',
+    createdAt: now,
+    spaceId: 'space-us',
   },
   {
     id: '2',
-    title: 'Groceries 🛒',
-    body: '- Milk\n- Eggs\n- Pasta\n- Something sweet 😉',
+    title: 'Groceries',
+    body: ['- Milk', '- Eggs', '- Pasta', '- Something sweet'].join('\n'),
     template: 'cute',
     sender: 'you',
-    createdAt: '2025-11-15T09:30:00.000Z',
+    deliveryStyle: 'sticky',
+    createdAt: now,
+    spaceId: 'space-us',
   },
   {
     id: '3',
     title: 'Proud of you',
-    body: 'Good luck with your exam today, you got this. ✨',
+    body: 'Good luck with your exam today, you got this.',
     template: 'calm',
     sender: 'them',
-    createdAt: '2025-11-15T08:00:00.000Z',
+    deliveryStyle: 'sticky',
+    createdAt: now,
+    spaceId: 'space-us',
   },
   {
     id: '4',
-    title: 'Dinner idea 🍝',
+    title: 'Dinner idea',
     body: "Carbonara tonight? I'll bring the parmesan!",
     template: 'fresh',
     sender: 'you',
-    createdAt: '2025-11-15T07:45:00.000Z',
+    deliveryStyle: 'sticky',
+    createdAt: now,
+    spaceId: 'space-us',
   },
 ];

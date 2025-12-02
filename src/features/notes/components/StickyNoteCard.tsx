@@ -1,92 +1,91 @@
 // src/features/notes/components/StickyNoteCard.tsx
+
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import type { Note } from '../types';
-import { colors } from '../../../theme/colors';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Note } from '../types';
+import { templateToColor } from '../utils/templateToColor';
+import colors from '../../../theme/colors';
 
-interface StickyNoteCardProps {
+type Props = {
   note: Note;
-  onPress?: () => void;
-}
-
-const templateToColor = (template: Note['template']) => {
-  switch (template) {
-    case 'pink':
-      return colors.stickyPink;
-    case 'blue':
-      return colors.stickyBlue;
-    case 'green':
-      return colors.stickyGreen;
-    case 'yellow':
-    default:
-      return colors.stickyYellow;
-  }
+  onPress: () => void;
+  onLongPress?: () => void; // Future hook for context menu (edit/delete/share)
 };
 
-export const StickyNoteCard: React.FC<StickyNoteCardProps> = ({
-  note,
-  onPress,
-}) => {
-  const backgroundColor = templateToColor(note.template);
+const StickyNoteCard: React.FC<Props> = ({ note, onPress, onLongPress }) => {
+  const templateColors = templateToColor(note.template);
+  const footerText = note.sender === 'you' ? 'From you' : 'From them';
 
   return (
     <TouchableOpacity
-      style={[styles.cardContainer, { backgroundColor }]}
-      onPress={onPress}
       activeOpacity={0.9}
+      onPress={onPress}
+      onLongPress={onLongPress}
+      style={styles.shadow}
     >
-      <View style={styles.pinDot} />
-      <Text style={styles.title} numberOfLines={1}>
-        {note.title}
-      </Text>
-      <Text style={styles.message} numberOfLines={4}>
-        {note.message}
-      </Text>
-      <Text style={styles.footer} numberOfLines={1}>
-        {note.fromMe ? 'From you 💌' : 'From them 💛'}
-      </Text>
+      <View style={[styles.card, { backgroundColor: templateColors.background }]}>
+        <View style={[styles.pin, { backgroundColor: templateColors.pin }]} />
+
+        <Text style={[styles.title, { color: templateColors.text }]} numberOfLines={1}>
+          {note.title}
+        </Text>
+
+        {note.body ? (
+          <Text style={[styles.body, { color: templateColors.text }]} numberOfLines={3}>
+            {note.body}
+          </Text>
+        ) : null}
+
+        <View style={styles.footerRow}>
+          <Text style={[styles.footerSender, { color: templateColors.footerText }]}>
+            {footerText}
+          </Text>
+        </View>
+      </View>
     </TouchableOpacity>
   );
 };
 
 const styles = StyleSheet.create({
-  cardContainer: {
-    width: '100%',
-    paddingTop: 10,
-    paddingHorizontal: 10,
-    paddingBottom: 12,
-    borderRadius: 18,
-    shadowColor: '#000',
-    shadowOpacity: 0.18,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 4,
-    transform: [{ rotate: '-1deg' }],
-},
-  pinDot: {
+  shadow: {
+    shadowColor: colors.cardShadow,
+    shadowOpacity: 1,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 6,
+  },
+  card: {
+    borderRadius: 24,
+    paddingHorizontal: 16,
+    paddingTop: 18,
+    paddingBottom: 14,
+    minHeight: 140,
+  },
+  pin: {
+    position: 'absolute',
+    top: 10,
+    right: 14,
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: '#9CA3AF',
-    alignSelf: 'flex-end',
-    marginBottom: 6,
   },
   title: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '700',
     color: colors.textPrimary,
-    marginBottom: 4,
+    marginBottom: 6,
   },
-  message: {
+  body: {
     fontSize: 14,
     color: colors.textSecondary,
-    marginBottom: 10,
   },
-  footer: {
+  footerRow: {
+    marginTop: 10,
+  },
+  footerSender: {
     fontSize: 12,
     color: colors.textSecondary,
-    marginTop: 'auto',
-    textAlign: 'right',
+    fontWeight: '500',
   },
 });
 

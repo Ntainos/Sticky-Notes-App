@@ -1,298 +1,248 @@
-import React, { useState } from 'react';
+// src/features/notes/screens/NotesHomeScreen.tsx
+
+import React, { useMemo, useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
   FlatList,
   SafeAreaView,
-  Modal,
-  TextInput,
+  StyleSheet,
+  Text,
   TouchableOpacity,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
+  View,
 } from 'react-native';
-import { StickyNoteCard } from '../components/StickyNoteCard';
-import type { NoteTemplate } from '../types';
-import { colors } from '../../../theme/colors';
-import { useNavigation } from '@react-navigation/native';
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import type { RootStackParamList } from '../../../navigation/types';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
+
+import { RootStackParamList } from '../../../navigation/types';
 import { useNotes } from '../context/NotesContext';
+import { Note, NoteSender } from '../types';
+import StickyNoteCard from '../components/StickyNoteCard';
+import colors from '../../../theme/colors';
+import { useSpaces } from '../../spaces/context/SpacesContext';
 
-type HomeScreenNavigationProp = NativeStackNavigationProp<
-  RootStackParamList,
-  'Home'
->;
+type Props = NativeStackScreenProps<RootStackParamList, 'NotesHome'>;
 
-type NotesFilter = 'all' | 'me' | 'them';
+type Filter = 'all' | 'you' | 'them';
 
-export const NotesHomeScreen: React.FC = () => {
-  const navigation = useNavigation<HomeScreenNavigationProp>();
+const NotesHomeScreen: React.FC<Props> = ({ navigation }) => {
+  const { notes } = useNotes();
+  const { activeSpace } = useSpaces();
 
-  const { notes, addNote } = useNotes();
+  const [filter, setFilter] = useState<Filter>('all');
 
-  const [filter, setFilter] = useState<NotesFilter>('all');
+  const filteredNotes = useMemo(() => {
+    if (filter === 'all') return notes;
 
-  const [isCreating, setIsCreating] = useState(false);
-  const [newTitle, setNewTitle] = useState('');
-  const [newMessage, setNewMessage] = useState('');
-  const [newTemplate, setNewTemplate] = useState<NoteTemplate>('yellow');
+    const sender: NoteSender = filter === 'you' ? 'you' : 'them';
+    return notes.filter((n) => n.sender === sender);
+  }, [notes, filter]);
 
-  const openCreateModal = () => {
-    setIsCreating(true);
+  const handlePressNote = (note: Note) => {
+    navigation.navigate('NoteDetails', { noteId: note.id, startInEditMode: false });
   };
 
-  const closeCreateModal = () => {
-    setIsCreating(false);
-    setNewTitle('');
-    setNewMessage('');
-    setNewTemplate('yellow');
+  const handleCreatePress = () => {
+    navigation.navigate('CreateNote');
   };
 
-  const handleSaveNote = () => {
-    if (!newTitle.trim() && !newMessage.trim()) {
-      return;
-    }
-
-    addNote({
-      title: newTitle,
-      message: newMessage,
-      template: newTemplate,
-      fromMe: true,
-    });
-
-    closeCreateModal();
+  const handleSpacePress = () => {
+    navigation.navigate('SpaceSwitcher');
   };
 
-  const renderTemplatePill = (template: NoteTemplate, label: string) => {
-    const isActive = newTemplate === template;
-    return (
-      <TouchableOpacity
-        key={template}
-        style={[
-          styles.templatePill,
-          isActive && styles.templatePillActive,
-        ]}
-        onPress={() => setNewTemplate(template)}
-      >
-        <View
-          style={[
-            styles.templateColorDot,
-            { backgroundColor: templateToColor(template) },
-          ]}
-        />
-        <Text
-          style={[
-            styles.templatePillText,
-            isActive && styles.templatePillTextActive,
-          ]}
-        >
-          {label}
-        </Text>
-      </TouchableOpacity>
-    );
-  };
+  const renderItem = ({ item }: { item: Note }) => (
+    <View style={styles.noteColumnItem}>
+      <StickyNoteCard note={item} onPress={() => handlePressNote(item)} />
+    </View>
+  );
 
-  const renderFilterChip = (value: NotesFilter, label: string) => {
-    const isActive = filter === value;
-    return (
-      <TouchableOpacity
-        key={value}
-        style={[
-          styles.filterChip,
-          isActive && styles.filterChipActive,
-        ]}
-        onPress={() => setFilter(value)}
-      >
-        <Text
-          style={[
-            styles.filterChipText,
-            isActive && styles.filterChipTextActive,
-          ]}
-        >
-          {label}
-        </Text>
-      </TouchableOpacity>
-    );
-  };
+  const ListEmptyComponent = () => (
+    <View style={styles.emptyStateContainer}>
+      <Text style={styles.emptyTitle}>No notes yet</Text>
+      <Text style={styles.emptySubtitle}>Tap the + button to leave a sweet note.</Text>
+    </View>
+  );
 
-  const filteredNotes = notes.filter((note) => {
-    if (filter === 'all') return true;
-    if (filter === 'me') return note.fromMe;
-    if (filter === 'them') return !note.fromMe;
-    return true;
-  });
+  const spaceLabel = activeSpace
+    ? `${activeSpace.emoji} ${activeSpace.name}`
+    : 'Select a space';
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <View style={styles.screenContainer}>
-        <Text style={styles.appTitle}>Fridge Notes</Text>
-        <Text style={styles.subtitle}>Little notes between two hearts 💛</Text>
+      <View style={styles.container}>
+        {/* Header */}
+        <View style={styles.header}>
+          <View>
+            <Text style={styles.title}>Fridge Notes</Text>
+            <Text style={styles.subtitle}>Little notes for every fridge space.</Text>
+          </View>
 
-        {/* Filter row */}
-        <View style={styles.filterRow}>
-          {renderFilterChip('all', 'All')}
-          {renderFilterChip('me', 'From you')}
-          {renderFilterChip('them', 'From them')}
+          <TouchableOpacity style={styles.spaceChip} onPress={handleSpacePress} activeOpacity={0.9}>
+            <Text style={styles.spaceChipText}>{spaceLabel}</Text>
+          </TouchableOpacity>
         </View>
 
-        <View style={styles.fridgeArea}>
+        {/* Filter chips */}
+        <View style={styles.filterRow}>
+          <FilterChip
+            label="All"
+            active={filter === 'all'}
+            onPress={() => setFilter('all')}
+          />
+          <FilterChip
+            label="From you"
+            active={filter === 'you'}
+            onPress={() => setFilter('you')}
+          />
+          <FilterChip
+            label="From them"
+            active={filter === 'them'}
+            onPress={() => setFilter('them')}
+          />
+        </View>
+
+        {/* Notes grid */}
+        <View style={styles.listWrapper}>
           <FlatList
             data={filteredNotes}
             keyExtractor={(item) => item.id}
             numColumns={2}
-            contentContainerStyle={styles.listContent}
+            renderItem={renderItem}
             columnWrapperStyle={styles.columnWrapper}
-            renderItem={({ item }) => (
-              <View style={styles.noteItem}>
-                <StickyNoteCard
-                  note={item}
-                  onPress={() =>
-                    navigation.navigate('NoteDetails', { note: item })
-                  }
-                />
-              </View>
-            )}
+            contentContainerStyle={
+              filteredNotes.length === 0 ? styles.emptyListContent : styles.listContent
+            }
+            ListEmptyComponent={ListEmptyComponent}
+            showsVerticalScrollIndicator={false}
           />
         </View>
 
         {/* Floating + button */}
-        <TouchableOpacity style={styles.fab} onPress={openCreateModal}>
+        <TouchableOpacity style={styles.fab} onPress={handleCreatePress} activeOpacity={0.9}>
           <Text style={styles.fabText}>+</Text>
         </TouchableOpacity>
-
-        {/* New note modal */}
-        <Modal visible={isCreating} animationType="slide" transparent>
-          <KeyboardAvoidingView
-            style={styles.modalOverlay}
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          >
-            <Pressable style={styles.modalBackdrop} onPress={closeCreateModal} />
-            <View style={styles.modalCard}>
-              <Text style={styles.modalTitle}>New note</Text>
-
-              <TextInput
-                placeholder="Title"
-                placeholderTextColor="#9CA3AF"
-                style={styles.input}
-                value={newTitle}
-                onChangeText={setNewTitle}
-              />
-
-              <TextInput
-                placeholder="Write your note..."
-                placeholderTextColor="#9CA3AF"
-                style={[styles.input, styles.messageInput]}
-                value={newMessage}
-                onChangeText={setNewMessage}
-                multiline
-              />
-
-              <Text style={styles.sectionLabel}>Template</Text>
-              <View style={styles.templateRow}>
-                {renderTemplatePill('yellow', 'Post-it')}
-                {renderTemplatePill('pink', 'Cute')}
-                {renderTemplatePill('blue', 'Calm')}
-                {renderTemplatePill('green', 'Fresh')}
-              </View>
-
-              <View style={styles.modalButtonsRow}>
-                <TouchableOpacity
-                  style={[styles.modalButton, styles.modalButtonSecondary]}
-                  onPress={closeCreateModal}
-                >
-                  <Text style={styles.modalButtonSecondaryText}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.modalButton, styles.modalButtonPrimary]}
-                  onPress={handleSaveNote}
-                >
-                  <Text style={styles.modalButtonPrimaryText}>Save</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </KeyboardAvoidingView>
-        </Modal>
       </View>
     </SafeAreaView>
   );
 };
 
-const templateToColor = (template: NoteTemplate) => {
-  switch (template) {
-    case 'pink':
-      return colors.stickyPink;
-    case 'blue':
-      return colors.stickyBlue;
-    case 'green':
-      return colors.stickyGreen;
-    case 'yellow':
-    default:
-      return colors.stickyYellow;
-  }
+type FilterChipProps = {
+  label: string;
+  active: boolean;
+  onPress: () => void;
 };
+
+const FilterChip: React.FC<FilterChipProps> = ({ label, active, onPress }) => (
+  <TouchableOpacity
+    onPress={onPress}
+    style={[
+      styles.filterChip,
+      active && {
+        backgroundColor: colors.chipActiveBackground,
+      },
+    ]}
+  >
+    <Text
+      style={[
+        styles.filterChipText,
+        active && {
+          color: colors.chipActiveText,
+          fontWeight: '600',
+        },
+      ]}
+    >
+      {label}
+    </Text>
+  </TouchableOpacity>
+);
 
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: colors.background,
   },
-  screenContainer: {
+  container: {
     flex: 1,
     paddingHorizontal: 16,
     paddingTop: 8,
   },
-  appTitle: {
-    fontSize: 28,
+  header: {
+    marginBottom: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  title: {
+    fontSize: 32,
     fontWeight: '800',
     color: colors.textPrimary,
   },
   subtitle: {
+    marginTop: 4,
     fontSize: 14,
     color: colors.textSecondary,
-    marginTop: 4,
-    marginBottom: 8,
+  },
+  spaceChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 999,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.chipBackground,
+  },
+  spaceChipText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.textPrimary,
   },
   filterRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
+    marginTop: 4,
+    marginBottom: 8,
     gap: 8,
   },
   filterChip: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
     borderRadius: 999,
-    backgroundColor: '#E5E7EB',
-  },
-  filterChipActive: {
-    backgroundColor: '#111827',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    backgroundColor: colors.chipBackground,
   },
   filterChipText: {
-    fontSize: 13,
+    fontSize: 14,
     color: colors.textSecondary,
   },
-  filterChipTextActive: {
-    color: '#F9FAFB',
-    fontWeight: '600',
-  },
-  fridgeArea: {
+  listWrapper: {
     flex: 1,
-    borderRadius: 24,
-    backgroundColor: colors.fridge,
-    paddingVertical: 12,
-    paddingHorizontal: 8,
-  },
-  listContent: {
-    paddingBottom: 16,
+    marginTop: 8,
   },
   columnWrapper: {
     justifyContent: 'space-between',
+    marginBottom: 16,
   },
-  noteItem: {
-    width: '48%',
-    marginBottom: 8,
+  listContent: {
+    paddingBottom: 100,
+  },
+  emptyListContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    paddingBottom: 100,
+  },
+  noteColumnItem: {
+    flex: 1,
+    marginRight: 8,
+  },
+  emptyStateContainer: {
+    alignItems: 'center',
+    paddingHorizontal: 24,
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: colors.textPrimary,
+    marginBottom: 4,
+  },
+  emptySubtitle: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    textAlign: 'center',
   },
   fab: {
     position: 'absolute',
@@ -302,117 +252,18 @@ const styles = StyleSheet.create({
     height: 64,
     borderRadius: 32,
     backgroundColor: colors.accent,
-    justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOpacity: 0.25,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 6,
+    justifyContent: 'center',
+    shadowColor: colors.cardShadow,
+    shadowOpacity: 1,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 12 },
+    elevation: 8,
   },
   fabText: {
     fontSize: 32,
-    color: '#fff',
+    color: '#FFFFFF',
     marginTop: -2,
-  },
-  modalOverlay: {
-    flex: 1,
-    justifyContent: 'flex-end',
-  },
-  modalBackdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.25)',
-  },
-  modalCard: {
-    backgroundColor: '#fff',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 24,
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: colors.textPrimary,
-    marginBottom: 12,
-  },
-  input: {
-    borderRadius: 14,
-    backgroundColor: '#F3F4F6',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 16,
-    color: colors.textPrimary,
-    marginBottom: 10,
-  },
-  messageInput: {
-    minHeight: 90,
-    textAlignVertical: 'top',
-  },
-  sectionLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.textSecondary,
-    marginTop: 8,
-    marginBottom: 6,
-  },
-  templateRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 12,
-  },
-  templatePill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-    backgroundColor: '#E5E7EB',
-  },
-  templatePillActive: {
-    backgroundColor: '#111827',
-  },
-  templateColorDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    marginRight: 6,
-  },
-  templatePillText: {
-    fontSize: 13,
-    color: colors.textSecondary,
-  },
-  templatePillTextActive: {
-    color: '#F9FAFB',
-  },
-  modalButtonsRow: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    marginTop: 8,
-  },
-  modalButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 999,
-    marginLeft: 8,
-  },
-  modalButtonSecondary: {
-    backgroundColor: '#E5E7EB',
-  },
-  modalButtonSecondaryText: {
-    color: colors.textPrimary,
-    fontSize: 15,
-    fontWeight: '500',
-  },
-  modalButtonPrimary: {
-    backgroundColor: colors.accent,
-  },
-  modalButtonPrimaryText: {
-    color: '#FFF',
-    fontSize: 15,
-    fontWeight: '600',
   },
 });
 

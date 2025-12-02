@@ -1,403 +1,387 @@
-import React, { useMemo, useState } from 'react';
+import React from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  SafeAreaView,
-  TouchableOpacity,
   Alert,
-  Modal,
   KeyboardAvoidingView,
+  Modal,
   Platform,
-  Pressable,
+  StyleSheet,
+  Text,
   TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
-import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
-import type { RootStackParamList } from '../../../navigation/types';
-import { colors } from '../../../theme/colors';
-import { templateToColor } from '../utils/templateToColor';
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
+
+import { RootStackParamList } from '../../../navigation/types';
 import { useNotes } from '../context/NotesContext';
-import type { NoteTemplate } from '../types';
+import { NoteTemplate } from '../types';
+import { templateToColor } from '../utils/templateToColor';
+import colors from '../../../theme/colors';
 
-type NoteRouteProp = RouteProp<RootStackParamList, 'NoteDetails'>;
-type NoteNavProp = NativeStackNavigationProp<RootStackParamList, 'NoteDetails'>;
+type Props = NativeStackScreenProps<RootStackParamList, 'NoteDetails'>;
 
-export const NoteDetailsScreen: React.FC = () => {
-  const route = useRoute<NoteRouteProp>();
-  const navigation = useNavigation<NoteNavProp>();
-  const { notes, updateNote, deleteNote } = useNotes();
+const NoteDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
+  const { noteId, startInEditMode } = route.params;
+  const { notes, deleteNote, updateNote } = useNotes();
 
-  const { note: routeNote } = route.params;
+  const note = React.useMemo(() => notes.find((n) => n.id === noteId), [notes, noteId]);
 
-  // βρίσκουμε πάντα την πιο φρέσκια έκδοση του note από το context
-  const note = useMemo(
-    () => notes.find((n) => n.id === routeNote.id) ?? routeNote,
-    [notes, routeNote],
+  const [isEditModalVisible, setEditModalVisible] = React.useState(false);
+  const [draftTitle, setDraftTitle] = React.useState(note?.title ?? '');
+  const [draftBody, setDraftBody] = React.useState(note?.body ?? '');
+  const [draftTemplate, setDraftTemplate] = React.useState<NoteTemplate>(
+    note?.template ?? 'postit',
   );
 
-  const [isEditing, setIsEditing] = useState(false);
-  const [editTitle, setEditTitle] = useState(note.title);
-  const [editMessage, setEditMessage] = useState(note.message);
-  const [editTemplate, setEditTemplate] = useState<NoteTemplate>(note.template);
+  React.useEffect(() => {
+    if (!note) return;
+    setDraftTitle(note.title);
+    setDraftBody(note.body);
+    setDraftTemplate(note.template);
+  }, [note]);
 
-  const handleDelete = () => {
+  React.useEffect(() => {
+    if (startInEditMode && note) {
+      setEditModalVisible(true);
+    }
+  }, [startInEditMode, note]);
+
+  const openEditModal = React.useCallback(() => {
+    if (!note) return;
+    setDraftTitle(note.title);
+    setDraftBody(note.body);
+    setDraftTemplate(note.template);
+    setEditModalVisible(true);
+  }, [note]);
+
+  const closeEditModal = React.useCallback(() => {
+    setEditModalVisible(false);
+  }, []);
+
+  const handleSaveEdit = React.useCallback(async () => {
+    if (!note) return;
+
+    const trimmedTitle = draftTitle.trim();
+    const trimmedBody = draftBody.trim();
+
+    if (!trimmedTitle && !trimmedBody) {
+      Alert.alert('Empty note', 'Please add a title or some text.');
+      return;
+    }
+
+    await updateNote(
+      note.id,
+      trimmedTitle || 'Untitled',
+      trimmedBody,
+      draftTemplate,
+      note.deliveryStyle,
+    );
+
+    setEditModalVisible(false);
+  }, [draftBody, draftTemplate, draftTitle, note, updateNote]);
+
+  const handleDeletePress = React.useCallback(() => {
+    if (!note) {
+      return;
+    }
+
     Alert.alert('Delete note', 'Are you sure you want to delete this note?', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete',
         style: 'destructive',
-        onPress: () => {
-          deleteNote(note.id);
-          navigation.goBack();
+        onPress: async () => {
+          await deleteNote(note.id);
+          navigation.navigate('NotesHome');
         },
       },
     ]);
-  };
+  }, [deleteNote, navigation, note]);
 
-  const openEdit = () => {
-    setEditTitle(note.title);
-    setEditMessage(note.message);
-    setEditTemplate(note.template);
-    setIsEditing(true);
-  };
-
-  const closeEdit = () => {
-    setIsEditing(false);
-  };
-
-  const handleSaveEdit = () => {
-    if (!editTitle.trim() && !editMessage.trim()) {
-      // αν είναι τελείως άδειο, απλά μην κάνεις save
-      return;
-    }
-
-    updateNote(note.id, {
-      title: editTitle.trim() || 'Untitled',
-      message: editMessage.trim(),
-      template: editTemplate,
+  React.useLayoutEffect(() => {
+    navigation.setOptions({
+      title: 'Note',
+      headerRight: () =>
+        note ? (
+          <View style={styles.headerButtons}>
+            <TouchableOpacity onPress={openEditModal}>
+              <Text style={styles.headerEditText}>Edit</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={handleDeletePress}>
+              <Text style={styles.headerDeleteText}>Delete</Text>
+            </TouchableOpacity>
+          </View>
+        ) : null,
     });
+  }, [handleDeletePress, navigation, note, openEditModal]);
 
-    setIsEditing(false);
-  };
-
-  const bgColor = templateToColor(note.template);
-  const createdDate = new Date(note.createdAt);
-
-  const renderTemplatePill = (template: NoteTemplate, label: string) => {
-    const isActive = editTemplate === template;
+  if (!note) {
     return (
-      <TouchableOpacity
-        key={template}
-        style={[
-          styles.templatePill,
-          isActive && styles.templatePillActive,
-        ]}
-        onPress={() => setEditTemplate(template)}
-      >
-        <View
-          style={[
-            styles.templateColorDot,
-            { backgroundColor: templateToColor(template) },
-          ]}
-        />
-        <Text
-          style={[
-            styles.templatePillText,
-            isActive && styles.templatePillTextActive,
-          ]}
-        >
-          {label}
-        </Text>
-      </TouchableOpacity>
+      <View style={styles.centered}>
+        <Text style={styles.mutedText}>Note not found.</Text>
+      </View>
     );
-  };
+  }
+
+  const templateColors = templateToColor(note.template);
+  const formattedDate = new Date(note.createdAt).toLocaleString();
+  const senderText = note.sender === 'you' ? 'From you' : 'From them';
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <View style={styles.screenContainer}>
-        <View style={styles.headerRow}>
-          <Text style={styles.screenTitle}>Note</Text>
-          <View style={styles.headerButtonsRow}>
-            <TouchableOpacity
-              style={[styles.headerPillButton, styles.editButton]}
-              onPress={openEdit}
-            >
-              <Text style={styles.editButtonText}>Edit</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.headerPillButton, styles.deleteButton]}
-              onPress={handleDelete}
-            >
-              <Text style={styles.deleteButtonText}>Delete</Text>
-            </TouchableOpacity>
-          </View>
+    <View style={styles.screen}>
+      <View style={[styles.card, { backgroundColor: templateColors.background }]}>
+        <View style={styles.cardPinWrapper}>
+          <View style={[styles.cardPin, { backgroundColor: templateColors.pin }]} />
         </View>
 
-        <View style={[styles.noteCard, { backgroundColor: bgColor }]}>
-          <View style={styles.pinDot} />
+        <Text style={[styles.title, { color: templateColors.text }]} numberOfLines={2}>
+          {note.title}
+        </Text>
 
-          <Text style={styles.title}>{note.title}</Text>
+        {!!note.body && (
+          <Text style={[styles.content, { color: templateColors.text }]}>{note.body}</Text>
+        )}
 
-          <Text style={styles.message}>{note.message}</Text>
-
-          <View style={styles.footerRow}>
-            <Text style={styles.footerText}>
-              {note.fromMe ? 'From you 💌' : 'From them 💛'}
-            </Text>
-            <Text style={styles.footerText}>
-              {createdDate.toLocaleDateString()},{' '}
-              {createdDate.toLocaleTimeString()}
-            </Text>
-          </View>
+        <View style={styles.footerRow}>
+          <Text style={[styles.footerText, { color: templateColors.footerText }]}>
+            {senderText}
+          </Text>
+          <Text style={[styles.footerText, { color: templateColors.footerText }]}>
+            {formattedDate}
+          </Text>
         </View>
-
-        {/* Edit modal */}
-        <Modal visible={isEditing} animationType="slide" transparent>
-          <KeyboardAvoidingView
-            style={styles.modalOverlay}
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          >
-            <Pressable style={styles.modalBackdrop} onPress={closeEdit} />
-            <View style={styles.modalCard}>
-              <Text style={styles.modalTitle}>Edit note</Text>
-
-              <TextInput
-                placeholder="Title"
-                placeholderTextColor="#9CA3AF"
-                style={styles.input}
-                value={editTitle}
-                onChangeText={setEditTitle}
-              />
-
-              <TextInput
-                placeholder="Write your note..."
-                placeholderTextColor="#9CA3AF"
-                style={[styles.input, styles.messageInput]}
-                value={editMessage}
-                onChangeText={setEditMessage}
-                multiline
-              />
-
-              <Text style={styles.sectionLabel}>Template</Text>
-              <View style={styles.templateRow}>
-                {renderTemplatePill('yellow', 'Post-it')}
-                {renderTemplatePill('pink', 'Cute')}
-                {renderTemplatePill('blue', 'Calm')}
-                {renderTemplatePill('green', 'Fresh')}
-              </View>
-
-              <View style={styles.modalButtonsRow}>
-                <TouchableOpacity
-                  style={[styles.modalButton, styles.modalButtonSecondary]}
-                  onPress={closeEdit}
-                >
-                  <Text style={styles.modalButtonSecondaryText}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.modalButton, styles.modalButtonPrimary]}
-                  onPress={handleSaveEdit}
-                >
-                  <Text style={styles.modalButtonPrimaryText}>Save</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </KeyboardAvoidingView>
-        </Modal>
       </View>
-    </SafeAreaView>
+
+      <Modal
+        visible={isEditModalVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={closeEditModal}
+      >
+        <KeyboardAvoidingView
+          style={styles.modalOverlay}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Edit note</Text>
+
+            <TextInput
+              style={styles.input}
+              value={draftTitle}
+              onChangeText={setDraftTitle}
+              placeholder="Title"
+              placeholderTextColor="#B0B0B0"
+            />
+
+            <TextInput
+              style={[styles.input, styles.multilineInput]}
+              value={draftBody}
+              onChangeText={setDraftBody}
+              placeholder="Write your note..."
+              placeholderTextColor="#B0B0B0"
+              multiline
+            />
+
+            <Text style={styles.templateLabel}>Template</Text>
+            <View style={styles.templateRow}>
+              {(['postit', 'cute', 'calm', 'fresh'] as NoteTemplate[]).map((tpl) => (
+                <TouchableOpacity
+                  key={tpl}
+                  style={[
+                    styles.templateChip,
+                    draftTemplate === tpl && styles.templateChipActive,
+                  ]}
+                  onPress={() => setDraftTemplate(tpl)}
+                >
+                  <Text
+                    style={[
+                      styles.templateChipText,
+                      draftTemplate === tpl && styles.templateChipTextActive,
+                    ]}
+                  >
+                    {tpl === 'postit'
+                      ? 'Post-it'
+                      : tpl.charAt(0).toUpperCase() + tpl.slice(1)}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <View style={styles.modalButtonsRow}>
+              <TouchableOpacity style={styles.modalButtonSecondary} onPress={closeEditModal}>
+                <Text style={styles.modalButtonSecondaryText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.modalButtonPrimary} onPress={handleSaveEdit}>
+                <Text style={styles.modalButtonPrimaryText}>Save</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-  safeArea: {
+  screen: {
     flex: 1,
     backgroundColor: colors.background,
-  },
-  screenContainer: {
-    flex: 1,
     paddingHorizontal: 16,
-    paddingTop: 8,
+    paddingTop: 16,
   },
-  headerRow: {
-    flexDirection: 'row',
+  centered: {
+    flex: 1,
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 12,
+    justifyContent: 'center',
+    backgroundColor: colors.background,
   },
-  screenTitle: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: colors.textPrimary,
+  mutedText: {
+    color: colors.textSecondary,
+    fontSize: 16,
   },
-  headerButtonsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+  card: {
+    borderRadius: 24,
+    paddingHorizontal: 24,
+    paddingTop: 40,
+    paddingBottom: 24,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 4,
   },
-  headerPillButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+  cardPinWrapper: {
+    position: 'absolute',
+    top: 16,
+    left: '50%',
+    marginLeft: -8,
+  },
+  cardPin: {
+    width: 16,
+    height: 16,
     borderRadius: 999,
   },
-  editButton: {
-    backgroundColor: '#E5E7EB',
-  },
-  editButtonText: {
-    color: colors.textPrimary,
-    fontWeight: '600',
-    fontSize: 14,
-  },
-  deleteButton: {
-    backgroundColor: '#FEE2E2',
-  },
-  deleteButtonText: {
-    color: '#DC2626',
-    fontWeight: '600',
-    fontSize: 14,
-  },
-  noteCard: {
-    flex: 1,
-    marginTop: 8,
-    marginBottom: 24,
-    borderRadius: 26,
-    paddingTop: 16,
-    paddingHorizontal: 16,
-    paddingBottom: 20,
-    shadowColor: '#000',
-    shadowOpacity: 0.18,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 6,
-    transform: [{ rotate: '-1deg' }],
-  },
-  pinDot: {
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-    backgroundColor: '#9CA3AF',
-    alignSelf: 'center',
+  title: {
+    fontSize: 24,
+    fontWeight: '700',
     marginBottom: 12,
   },
-  title: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: colors.textPrimary,
-    marginBottom: 8,
-  },
-  message: {
+  content: {
     fontSize: 16,
-    color: colors.textSecondary,
-    marginBottom: 16,
+    lineHeight: 22,
+    marginBottom: 24,
   },
   footerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: 'auto',
+    alignItems: 'center',
   },
   footerText: {
     fontSize: 13,
-    color: colors.textSecondary,
+    fontWeight: '500',
   },
-  // modal
+  headerButtons: {
+    flexDirection: 'row',
+    gap: 16,
+  },
+  headerEditText: {
+    color: colors.accent,
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  headerDeleteText: {
+    color: '#FF3B30',
+    fontSize: 16,
+    fontWeight: '500',
+  },
   modalOverlay: {
     flex: 1,
     justifyContent: 'flex-end',
-  },
-  modalBackdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.25)',
+    backgroundColor: 'rgba(0,0,0,0.35)',
   },
   modalCard: {
-    backgroundColor: '#fff',
+    backgroundColor: '#FFF',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     paddingHorizontal: 20,
     paddingTop: 16,
-    paddingBottom: 24,
+    paddingBottom: 32,
   },
   modalTitle: {
     fontSize: 20,
     fontWeight: '700',
+    marginBottom: 16,
+    color: colors.textPrimary,
+  },
+  input: {
+    backgroundColor: '#F4F5F7',
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 16,
     color: colors.textPrimary,
     marginBottom: 12,
   },
-  input: {
-    borderRadius: 14,
-    backgroundColor: '#F3F4F6',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 16,
-    color: colors.textPrimary,
-    marginBottom: 10,
-  },
-  messageInput: {
-    minHeight: 90,
+  multilineInput: {
+    minHeight: 80,
     textAlignVertical: 'top',
   },
-  sectionLabel: {
+  templateLabel: {
     fontSize: 14,
     fontWeight: '600',
+    marginBottom: 8,
     color: colors.textSecondary,
-    marginTop: 8,
-    marginBottom: 6,
   },
   templateRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
-    marginBottom: 12,
+    marginBottom: 20,
   },
-  templatePill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+  templateChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
     borderRadius: 999,
-    backgroundColor: '#E5E7EB',
+    backgroundColor: '#ECEFF4',
   },
-  templatePillActive: {
-    backgroundColor: '#111827',
+  templateChipActive: {
+    backgroundColor: colors.accent,
   },
-  templateColorDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    marginRight: 6,
-  },
-  templatePillText: {
-    fontSize: 13,
+  templateChipText: {
+    fontSize: 14,
+    fontWeight: '500',
     color: colors.textSecondary,
   },
-  templatePillTextActive: {
-    color: '#F9FAFB',
+  templateChipTextActive: {
+    color: '#FFF',
   },
   modalButtonsRow: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
     marginTop: 8,
   },
-  modalButton: {
+  modalButtonSecondary: {
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 999,
-    marginLeft: 8,
-  },
-  modalButtonSecondary: {
-    backgroundColor: '#E5E7EB',
+    backgroundColor: '#ECEFF4',
+    marginRight: 8,
   },
   modalButtonSecondaryText: {
-    color: colors.textPrimary,
     fontSize: 15,
     fontWeight: '500',
+    color: colors.textPrimary,
   },
   modalButtonPrimary: {
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 999,
     backgroundColor: colors.accent,
   },
   modalButtonPrimaryText: {
-    color: '#FFF',
     fontSize: 15,
     fontWeight: '600',
+    color: '#FFF',
   },
 });
 
